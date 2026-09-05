@@ -145,6 +145,7 @@
     .scan-hint { font-size: 0.78rem; color: var(--ink-soft); }
     .scan-hint .link { color: var(--accent); text-decoration: underline; }
     #fileInput { display: none; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
     /* ── Sample preview ── */
     .sample { display: none; margin-top: 1rem; border: 1px solid var(--line); }
@@ -277,7 +278,8 @@
         <div class="corner bl"></div><div class="corner br"></div>
         <div class="scan-label" id="dropLabel">Drop an image</div>
         <div class="scan-hint" id="dropHint">or <span class="link">choose a file</span> — jpg, png, webp</div>
-        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" />
+        <label for="fileInput" class="visually-hidden">Choose a file to analyze</label>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" aria-label="Choose a file to analyze" />
       </div>
 
       <div class="sample" id="previewArea">
@@ -294,12 +296,12 @@
 
       <button class="run-btn" id="analyzeBtn" disabled>Run analysis</button>
 
-      <div class="ticker" id="statusBar">
+      <div class="ticker" id="statusBar" role="status" aria-live="polite">
         <span class="cursor"></span>
         <span id="statusText">Working…</span>
       </div>
 
-      <div class="alert" id="errorToast"></div>
+      <div class="alert" id="errorToast" role="alert"></div>
 
       <section class="verdict" id="resultCard">
         <div class="stamp-row">
@@ -331,6 +333,8 @@
   <script>
     let currentMode = 'image';
     let selectedFile = null;
+    let previewUrl = null;
+    const MAX_CLIENT_FILE_BYTES = 50 * 1024 * 1024;
 
     const $ = (s) => document.querySelector(s);
     const tabs        = document.querySelectorAll('.channel');
@@ -380,7 +384,9 @@
     tabs.forEach(t => t.addEventListener('click', () => switchMode(t.dataset.mode)));
 
     dropzone.addEventListener('click', () => fileInput.click());
-    dropzone.addEventListener('keydown', e => { if (e.key === 'Enter') fileInput.click(); });
+    dropzone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
 
     dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
@@ -391,16 +397,26 @@
     });
 
     function handleFile(file) {
+      const cfg = modeConfig[currentMode];
+      if (file.size > MAX_CLIENT_FILE_BYTES) {
+        showError('This file is larger than the 50 MB limit.');
+        return;
+      }
+      if (!file.type || !cfg.accept.split(',').some(type => type.startsWith('.') ? file.name.toLowerCase().endsWith(type) : file.type === type)) {
+        showError('This file type is not supported for the selected mode.');
+        return;
+      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       selectedFile = file;
       hideResult(); hideError();
       previewImg.style.display = 'none';
       previewAud.style.display = 'none';
       previewVid.style.display = 'none';
 
-      const url = URL.createObjectURL(file);
-      if (currentMode === 'image') { previewImg.src = url; previewImg.style.display = 'block'; }
-      else if (currentMode === 'audio') { previewAud.src = url; previewAud.style.display = 'block'; }
-      else { previewVid.src = url; previewVid.style.display = 'block'; }
+      previewUrl = URL.createObjectURL(file);
+      if (currentMode === 'image') { previewImg.src = previewUrl; previewImg.style.display = 'block'; }
+      else if (currentMode === 'audio') { previewAud.src = previewUrl; previewAud.style.display = 'block'; }
+      else { previewVid.src = previewUrl; previewVid.style.display = 'block'; }
 
       previewName.textContent = file.name;
       previewArea.classList.add('visible');
@@ -410,6 +426,8 @@
 
     removeBtn.addEventListener('click', clearSelection);
     function clearSelection() {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = null;
       selectedFile = null;
       fileInput.value = '';
       previewArea.classList.remove('visible');
@@ -418,7 +436,7 @@
       hideStatus(); hideResult(); hideError();
     }
 
-    function showStatus(html) { statusText.innerHTML = html; statusBar.classList.add('visible'); }
+    function showStatus(text) { statusText.textContent = text; statusBar.classList.add('visible'); }
     function hideStatus() { statusBar.classList.remove('visible'); }
     function showError(msg) { errorToast.textContent = msg; errorToast.classList.add('visible'); }
     function hideError() { errorToast.classList.remove('visible'); }
@@ -461,8 +479,9 @@
           }
           video.addEventListener('seeked', function onSeeked() {
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            const scale = Math.min(1, 1280 / video.videoWidth, 1280 / video.videoHeight);
+            canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
+            canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
             canvas.getContext('2d').drawImage(video, 0, 0);
             canvas.toBlob(blobData => { frames.push(blobData); idx++; seekNext(); }, 'image/jpeg', 0.92);
           });

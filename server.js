@@ -7,6 +7,7 @@
 import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
+import { fileTypeFromBuffer } from 'file-type';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -16,12 +17,53 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HF_API_KEY = process.env.HF_API_KEY;
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const REQUEST_WINDOW_MS = 15 * 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 30;
+const MAX_CONCURRENT_ANALYSES = 4;
+let activeAnalyses = 0;
 
 // ── Multer (in-memory) ──────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB ceiling
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 3 },
 });
+
+const rateLimiters = new Map();
+function requestRateLimit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || 'unknown';
+  const entry = rateLimiters.get(key) || { count: 0, resetAt: now + REQUEST_WINDOW_MS };
+  if (now >= entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + REQUEST_WINDOW_MS;
+  }
+  entry.count += 1;
+  rateLimiters.set(key, entry);
+  if (entry.count > MAX_REQUESTS_PER_WINDOW) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  return next();
+}
+
+function analysisCapacity(req, res, next) {
+  if (activeAnalyses >= MAX_CONCURRENT_ANALYSES) {
+    return res.status(503).json({ error: 'Analysis capacity is temporarily full. Please try again shortly.' });
+  }
+  activeAnalyses += 1;
+  res.once('finish', () => { activeAnalyses -= 1; });
+  return next();
+}
+
+async function validateUpload(file, allowedTypes) {
+  if (!file) return 'No file uploaded.';
+  const detected = await fileTypeFromBuffer(file.buffer);
+  const detectedMime = detected?.mime;
+  if (!detectedMime || !allowedTypes.has(detectedMime)) {
+    return 'Unsupported or invalid file type.';
+  }
+  return null;
+}
 
 // ── Static files ─────────────────────────────────────────────
 app.use(express.static(join(__dirname, 'public')));
@@ -36,6 +78,9 @@ const IMAGE_MODELS = [
   { url: `${HF_BASE}/Organika/sdxl-detector`,              name: 'SDXL Detector' },
 ];
 const HF_AUDIO_MODEL = `${HF_BASE}/mo-thecreator/Deepfake-audio-detection`;
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const AUDIO_TYPES = new Set(['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/mp4']);
+const FRAME_TYPES = new Set(['image/jpeg']);
 
 // ─────────────────────────────────────────────────────────────
 // Helper: call Hugging Face Inference API and handle errors
@@ -114,8 +159,7 @@ async function callHuggingFace(url, buffer, contentType = 'application/octet-str
   }
 
   if (!response.ok) {
-    const text = await response.text().catch(() => 'Unknown error');
-    return { ok: false, retryable: false, error: `Hugging Face API error (${response.status}): ${text}` };
+    return { ok: false, retryable: false, error: `Hugging Face API error (${response.status}).` };
   }
 
   const data = await response.json();
@@ -131,6 +175,7 @@ function extractScores(data) {
   let fakeScore = 0;
   let realScore = 0;
   for (const item of flat) {
+    if (!item || typeof item.label !== 'string' || typeof item.score !== 'number') continue;
     const lbl = item.label.toLowerCase();
     if (lbl.includes('ai') || lbl.includes('fake') || lbl.includes('generated') ||
         lbl.includes('artificial') || lbl.includes('sdxl') || lbl.includes('synthetic')) {
@@ -139,7 +184,7 @@ function extractScores(data) {
       realScore = item.score;
     }
   }
-  return { fakeScore, realScore, raw: flat };
+  return { fakeScore, realScore, raw: flat.filter(item => item && typeof item.label === 'string') };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -210,9 +255,10 @@ async function ensembleImageAnalysis(buffer) {
 // ─────────────────────────────────────────────────────────────
 // POST /api/detect/image — 3-model ensemble
 // ─────────────────────────────────────────────────────────────
-app.post('/api/detect/image', upload.single('file'), async (req, res) => {
+app.post('/api/detect/image', requestRateLimit, analysisCapacity, upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No image file uploaded.' });
+    const uploadError = await validateUpload(req.file, IMAGE_TYPES);
+    if (uploadError) return res.status(400).json({ error: uploadError });
 
     const result = await ensembleImageAnalysis(req.file.buffer);
     if (!result.ok) {
@@ -233,9 +279,10 @@ app.post('/api/detect/image', upload.single('file'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // POST /api/detect/audio
 // ─────────────────────────────────────────────────────────────
-app.post('/api/detect/audio', upload.single('file'), async (req, res) => {
+app.post('/api/detect/audio', requestRateLimit, analysisCapacity, upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No audio file uploaded.' });
+    const uploadError = await validateUpload(req.file, AUDIO_TYPES);
+    if (uploadError) return res.status(400).json({ error: uploadError });
 
     const result = await callHuggingFace(HF_AUDIO_MODEL, req.file.buffer);
     if (!result.ok) {
@@ -248,6 +295,7 @@ app.post('/api/detect/audio', upload.single('file'), async (req, res) => {
     let fakeScore = 0;
     let realScore = 0;
     for (const item of flat) {
+      if (!item || typeof item.label !== 'string' || typeof item.score !== 'number') continue;
       const lbl = item.label.toLowerCase();
       if (lbl.includes('fake') || lbl.includes('spoof') || lbl.includes('deepfake') || lbl.includes('synthetic')) {
         fakeScore = item.score;
@@ -281,10 +329,14 @@ app.post('/api/detect/audio', upload.single('file'), async (req, res) => {
 // Receives up to 3 extracted JPEG keyframes and runs each
 // through the image model concurrently.
 // ─────────────────────────────────────────────────────────────
-app.post('/api/detect/video-frames', upload.array('frames', 3), async (req, res) => {
+app.post('/api/detect/video-frames', requestRateLimit, analysisCapacity, upload.array('frames', 3), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No video frames uploaded.' });
+    }
+    for (const frame of req.files) {
+      const uploadError = await validateUpload(frame, FRAME_TYPES);
+      if (uploadError) return res.status(400).json({ error: 'All video frames must be valid JPEG images.' });
     }
 
     // Run each frame through the full 3-model ensemble
@@ -343,7 +395,7 @@ app.get('*', (_req, res) => {
 app.use((err, _req, res, _next) => {
   console.error('[Global Error Handler]', err.message || err);
   if (!res.headersSent) {
-    res.status(400).json({ error: 'Bad request: ' + (err.message || 'malformed upload') });
+    res.status(400).json({ error: 'Bad request. Check the uploaded file and try again.' });
   }
 });
 
@@ -355,10 +407,4 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Unhandled Rejection]', reason);
 });
 
-// ── Start ────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n  🛡️  Multimodal AI Detector running → http://localhost:${PORT}\n`);
-  if (!HF_API_KEY || HF_API_KEY === 'your_huggingface_api_token_here') {
-    console.warn('  ⚠️  WARNING: HF_API_KEY is not set. API calls will fail.\n');
-  }
-});
+export { app, extractScores, validateUpload, PORT, HF_API_KEY };
