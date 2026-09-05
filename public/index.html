@@ -3,467 +3,339 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Content Detector — Image · Audio · Video</title>
-  <meta name="description" content="Detect AI-generated images, deepfake audio, and synthetic video using free, multimodal machine-learning analysis." />
+  <title>CheckMe — verify what's real</title>
+  <meta name="description" content="Independent authenticity checks for images, audio, and video." />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <style>
-    /* ───── Design Tokens ───── */
     :root {
-      --bg-primary: #0b0d11;
-      --bg-secondary: #12151c;
-      --bg-card: #181c27;
-      --bg-card-hover: #1e2333;
-      --bg-drop: #141824;
-      --border: #252a3a;
-      --border-active: #4f6ef7;
-      --text-primary: #e8ecf4;
-      --text-secondary: #8892a8;
-      --text-muted: #5c6478;
-      --accent: #4f6ef7;
-      --accent-glow: rgba(79, 110, 247, .25);
-      --green: #34d399;
-      --green-bg: rgba(52, 211, 153, .12);
-      --red: #f87171;
-      --red-bg: rgba(248, 113, 113, .12);
-      --amber: #fbbf24;
-      --amber-bg: rgba(251, 191, 36, .12);
-      --radius: 14px;
-      --radius-sm: 8px;
-      --transition: .25s cubic-bezier(.4,0,.2,1);
-      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --paper: #eef0ee;
+      --paper-raised: #f6f7f5;
+      --ink: #181b1a;
+      --ink-soft: #565f5c;
+      --line: #cfd4cf;
+
+      --accent: #33506b;
+      --accent-soft: rgba(51, 80, 107, 0.1);
+
+      --red: #a83a20;
+      --red-soft: #f3e3dc;
+      --green: #2e6b4c;
+      --green-soft: #dde9e1;
+      --amber: #93700f;
+      --amber-soft: #efe7d3;
+
+      --radius: 3px;
+      --serif: 'Fraunces', Georgia, serif;
+      --mono: 'IBM Plex Mono', ui-monospace, monospace;
     }
 
-    /* ───── Reset & Base ───── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 16px; scroll-behavior: smooth; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
     body {
-      font-family: var(--font);
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      background: var(--paper);
+      background-image: linear-gradient(var(--line) 1px, transparent 1px),
+                         linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 28px 28px;
+      background-position: -1px -1px;
+      color: var(--ink);
+      font-family: var(--mono);
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      overflow-x: hidden;
+      justify-content: center;
+      padding: 3rem 1.25rem 5rem;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ───── Animated Background ───── */
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background:
-        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(79,110,247,.08) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 90%, rgba(168,85,247,.06) 0%, transparent 60%);
-      pointer-events: none;
-      z-index: 0;
+    .sheet {
+      width: 100%;
+      max-width: 560px;
+      background: var(--paper-raised);
+      border: 1px solid var(--line);
     }
 
-    /* ───── Layout ───── */
-    .container {
-      position: relative; z-index: 1;
-      width: 100%; max-width: 680px;
-      padding: 2rem 1.25rem 4rem;
+    /* ── Masthead ── */
+    .masthead {
+      padding: 2rem 2rem 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .wordmark {
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+      margin-bottom: 1.1rem;
+    }
+    h1 {
+      font-family: var(--serif);
+      font-weight: 600;
+      font-size: 1.9rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 0.5rem;
+      color: var(--ink);
+    }
+    .masthead p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.84rem;
+      max-width: 40ch;
     }
 
-    /* ───── Header ───── */
-    header { text-align: center; margin-bottom: 2.5rem; }
-    .logo {
-      display: inline-flex; align-items: center; gap: .6rem;
-      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
-      color: var(--text-primary); margin-bottom: .75rem;
+    /* ── Channel selector ── */
+    .channels {
+      display: flex;
+      border-bottom: 1px solid var(--line);
     }
-    .logo-icon {
-      width: 38px; height: 38px; border-radius: 10px;
-      background: linear-gradient(135deg, #4f6ef7, #a855f7);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.15rem; color: #fff;
-      box-shadow: 0 0 24px rgba(79,110,247,.35);
+    .channel {
+      flex: 1;
+      background: none;
+      border: none;
+      border-right: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      padding: 0.85rem 0.5rem;
+      cursor: pointer;
+      position: relative;
     }
-    header p {
-      color: var(--text-secondary); font-size: .92rem;
-      line-height: 1.55; max-width: 440px; margin: 0 auto;
+    .channel:last-child { border-right: none; }
+    .channel::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: -1px;
+      height: 2px;
+      background: var(--ink);
+      transform: scaleX(0);
+      transition: transform 0.2s ease;
+    }
+    .channel.active { color: var(--ink); font-weight: 500; }
+    .channel.active::after { transform: scaleX(1); }
+    .channel:focus-visible, button:focus-visible, .scan-frame:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
-    /* ───── Tabs ───── */
-    .tabs {
-      display: flex; gap: 4px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 4px;
-      margin-bottom: 1.5rem;
-    }
-    .tab {
-      flex: 1; padding: .65rem .5rem;
-      text-align: center; cursor: pointer;
-      border-radius: 9px; border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      font-family: var(--font); font-size: .84rem; font-weight: 600;
-      transition: var(--transition);
-      display: flex; align-items: center; justify-content: center; gap: .4rem;
-    }
-    .tab:hover { color: var(--text-primary); background: var(--bg-card); }
-    .tab.active {
-      background: var(--accent);
-      color: #fff;
-      box-shadow: 0 2px 12px var(--accent-glow);
-    }
-    .tab-icon { font-size: 1rem; }
+    /* ── Body padding wrapper ── */
+    .body-pad { padding: 1.75rem 2rem 2rem; }
 
-    /* ───── Dropzone ───── */
-    .dropzone {
-      border: 2px dashed var(--border);
-      border-radius: var(--radius);
-      background: var(--bg-drop);
-      padding: 2.8rem 1.5rem;
+    /* ── Scan frame (dropzone) ── */
+    .scan-frame {
+      position: relative;
+      border: 1px dashed var(--line);
+      padding: 2.75rem 1.5rem;
       text-align: center;
       cursor: pointer;
-      transition: var(--transition);
-      position: relative;
-      overflow: hidden;
+      background: var(--paper);
     }
-    .dropzone::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: radial-gradient(circle at center, var(--accent-glow) 0%, transparent 70%);
-      opacity: 0; transition: opacity .3s;
+    .scan-frame.drag-over { border-color: var(--accent); background: var(--accent-soft); }
+    .corner {
+      position: absolute;
+      width: 14px; height: 14px;
+      border: 1.5px solid var(--ink);
     }
-    .dropzone.drag-over { border-color: var(--accent); }
-    .dropzone.drag-over::before { opacity: 1; }
-    .dropzone:hover { border-color: var(--border-active); background: var(--bg-card); }
-    .drop-icon { font-size: 2.4rem; margin-bottom: .75rem; display: block; opacity: .7; }
-    .drop-label { font-size: .95rem; font-weight: 600; color: var(--text-primary); margin-bottom: .35rem; }
-    .drop-hint { font-size: .78rem; color: var(--text-muted); }
-    .drop-hint span { color: var(--accent); font-weight: 600; }
+    .corner.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .corner.tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+    .corner.bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+    .corner.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    .scan-label { font-size: 0.92rem; font-weight: 500; margin-bottom: 0.35rem; }
+    .scan-hint { font-size: 0.78rem; color: var(--ink-soft); }
+    .scan-hint .link { color: var(--accent); text-decoration: underline; }
     #fileInput { display: none; }
 
-    /* ───── Preview ───── */
-    .preview-area {
-      margin-top: 1.25rem;
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
+    /* ── Sample preview ── */
+    .sample { display: none; margin-top: 1rem; border: 1px solid var(--line); }
+    .sample.visible { display: block; }
+    .sample-media { background: var(--ink); display: flex; align-items: center; justify-content: center; }
+    .sample-media img, .sample-media video { width: 100%; max-height: 300px; object-fit: contain; display: block; }
+    .sample-media audio { width: 88%; margin: 1.5rem 0; }
+    .sample-strip {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.55rem 0.9rem; border-top: 1px solid var(--line);
+      font-size: 0.76rem; color: var(--ink-soft);
+    }
+    .text-btn { background: none; border: none; color: var(--red); font-family: var(--mono); font-size: 0.76rem; cursor: pointer; padding: 0; }
+    .text-btn:hover { text-decoration: underline; }
+
+    /* ── Run button ── */
+    .run-btn {
       display: none;
-      position: relative;
+      width: 100%; margin-top: 1rem; padding: 0.8rem;
+      background: var(--ink); color: var(--paper-raised);
+      border: none; font-family: var(--mono); font-size: 0.88rem; font-weight: 500;
+      cursor: pointer;
     }
-    .preview-area.visible { display: block; animation: fadeUp .35s ease; }
-    .preview-area img,
-    .preview-area video {
-      width: 100%; display: block;
-      max-height: 340px; object-fit: contain;
-      background: #000;
-    }
-    .preview-area audio {
-      width: 100%; display: block; padding: 1.5rem;
-      background: var(--bg-card);
-    }
-    .preview-filename {
-      padding: .6rem 1rem;
-      font-size: .75rem; color: var(--text-muted);
-      border-top: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .preview-remove {
-      background: none; border: none; cursor: pointer;
-      color: var(--red); font-size: .8rem; font-weight: 600;
-      font-family: var(--font);
-    }
-    .preview-remove:hover { text-decoration: underline; }
+    .run-btn.visible { display: block; }
+    .run-btn:hover { background: #000; }
+    .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ───── Analyze Button ───── */
-    .analyze-btn {
-      width: 100%; margin-top: 1.25rem;
-      padding: .85rem; border: none; border-radius: var(--radius-sm);
-      background: linear-gradient(135deg, #4f6ef7, #7c5cf7);
-      color: #fff; font-family: var(--font);
-      font-size: .95rem; font-weight: 700;
-      cursor: pointer; transition: var(--transition);
-      box-shadow: 0 4px 20px var(--accent-glow);
-      display: none;
+    /* ── Ticker ── */
+    .ticker {
+      display: none; align-items: baseline; gap: 0.5rem;
+      margin-top: 1rem; font-size: 0.8rem; color: var(--ink-soft);
     }
-    .analyze-btn.visible { display: block; animation: fadeUp .3s ease; }
-    .analyze-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px var(--accent-glow); }
-    .analyze-btn:active { transform: translateY(0); }
-    .analyze-btn:disabled {
-      opacity: .55; cursor: not-allowed;
-      transform: none !important; box-shadow: none !important;
+    .ticker.visible { display: flex; }
+    .cursor {
+      width: 7px; height: 1rem; background: var(--ink); flex-shrink: 0;
+      animation: blink 1s step-end infinite;
     }
+    @keyframes blink { 50% { opacity: 0; } }
 
-    /* ───── Status Bar ───── */
-    .status-bar {
-      display: none;
-      margin-top: 1.25rem;
-      padding: 1rem 1.25rem;
-      border-radius: var(--radius-sm);
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      animation: fadeUp .3s ease;
+    /* ── Alert ── */
+    .alert {
+      display: none; margin-top: 1rem; padding: 0.75rem 0.9rem;
+      border: 1px solid var(--red); background: var(--red-soft); color: var(--red);
+      font-size: 0.8rem;
     }
-    .status-bar.visible { display: flex; align-items: center; gap: .85rem; }
-    .spinner {
-      width: 22px; height: 22px;
-      border: 2.5px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      flex-shrink: 0;
-    }
-    .status-text { font-size: .85rem; color: var(--text-secondary); line-height: 1.4; }
-    .status-text strong { color: var(--text-primary); }
+    .alert.visible { display: block; }
 
-    /* ───── Result Card ───── */
-    .result-card {
-      display: none;
-      margin-top: 1.5rem;
-      border-radius: var(--radius);
-      overflow: hidden;
-      border: 1px solid var(--border);
-      animation: fadeUp .4s ease;
-    }
-    .result-card.visible { display: block; }
+    /* ── Verdict ── */
+    .verdict { display: none; margin-top: 1.5rem; }
+    .verdict.visible { display: block; }
 
-    .result-header {
-      padding: 1.5rem;
-      text-align: center;
-      position: relative;
+    .stamp-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .stamp {
+      display: inline-block;
+      border: 2px solid currentColor;
+      padding: 0.5rem 0.9rem;
+      transform: rotate(-3deg);
+      animation: stampIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.2);
     }
-    .result-header::before {
-      content: '';
-      position: absolute; inset: 0;
-      opacity: .6;
-      z-index: 0;
+    .stamp-text {
+      font-family: var(--serif);
+      font-weight: 600;
+      font-size: 1.05rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
-    .result-header > * { position: relative; z-index: 1; }
-    .result-verdict-icon { font-size: 2.2rem; margin-bottom: .5rem; display: block; }
-    .result-verdict-label {
-      font-size: 1.35rem; font-weight: 800;
-      letter-spacing: -.02em; margin-bottom: .15rem;
+    .verdict.ai .stamp, .verdict.ai .conf-figure { color: var(--red); }
+    .verdict.real .stamp, .verdict.real .conf-figure { color: var(--green); }
+    .verdict.inconclusive .stamp, .verdict.inconclusive .conf-figure { color: var(--amber); }
+
+    @keyframes stampIn {
+      from { opacity: 0; transform: scale(1.5) rotate(-10deg); }
+      to { opacity: 1; transform: scale(1) rotate(-3deg); }
     }
-    .result-confidence {
-      font-size: 2rem; font-weight: 800;
-      letter-spacing: -.03em;
-    }
-    .result-confidence-label {
-      font-size: .78rem; font-weight: 500;
-      text-transform: uppercase; letter-spacing: .06em;
-      opacity: .7; margin-top: .1rem;
+    @media (prefers-reduced-motion: reduce) {
+      .stamp { animation: none; }
+      .cursor { animation: none; opacity: 1; }
     }
 
-    /* Verdict colors */
-    .result-card.verdict-ai .result-header { background: var(--red-bg); }
-    .result-card.verdict-ai .result-header::before { background: linear-gradient(135deg, rgba(248,113,113,.08), transparent); }
-    .result-card.verdict-ai .result-verdict-label,
-    .result-card.verdict-ai .result-confidence { color: var(--red); }
+    .conf-figure { font-family: var(--serif); font-size: 2rem; font-weight: 600; line-height: 1; text-align: right; }
+    .conf-caption { font-size: 0.68rem; color: var(--ink-soft); text-align: right; margin-top: 0.2rem; }
 
-    .result-card.verdict-real .result-header { background: var(--green-bg); }
-    .result-card.verdict-real .result-header::before { background: linear-gradient(135deg, rgba(52,211,153,.08), transparent); }
-    .result-card.verdict-real .result-verdict-label,
-    .result-card.verdict-real .result-confidence { color: var(--green); }
+    .split-bar { display: flex; height: 10px; border: 1px solid var(--line); overflow: hidden; }
+    .split-fake { background: var(--red); }
+    .split-real { background: var(--green); }
+    .verdict.inconclusive .split-fake { background: var(--amber); }
+    .verdict.inconclusive .split-real { background: var(--line); }
 
-    .result-card.verdict-inconclusive .result-header { background: var(--amber-bg); }
-    .result-card.verdict-inconclusive .result-header::before { background: linear-gradient(135deg, rgba(251,191,36,.08), transparent); }
-    .result-card.verdict-inconclusive .result-verdict-label,
-    .result-card.verdict-inconclusive .result-confidence { color: var(--amber); }
+    .split-labels { display: flex; justify-content: space-between; margin-top: 0.4rem; font-size: 0.76rem; color: var(--ink-soft); }
+    .split-labels .fake-label { color: var(--red); }
+    .split-labels .real-label { color: var(--green); }
+    .verdict.inconclusive .split-labels .fake-label { color: var(--amber); }
+    .verdict.inconclusive .split-labels .real-label { color: var(--ink-soft); }
 
-    .result-meta {
-      background: var(--bg-card);
-      padding: 1rem 1.25rem;
-      display: flex; flex-wrap: wrap; gap: .5rem;
-    }
-    .result-tag {
-      display: inline-flex; align-items: center; gap: .35rem;
-      padding: .35rem .7rem;
-      font-size: .72rem; font-weight: 600;
-      border-radius: 6px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-    }
-    .result-tag .tag-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent);
+    .meta { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1.1rem; }
+    .meta span {
+      font-size: 0.72rem; color: var(--ink-soft);
+      border: 1px solid var(--line); padding: 0.25rem 0.55rem;
     }
 
-    /* Confidence Bar */
-    .confidence-bar-track {
-      height: 6px; border-radius: 3px;
-      background: var(--bg-secondary);
-      margin: .75rem 1.25rem 1rem;
-      overflow: hidden;
-    }
-    .confidence-bar-fill {
-      height: 100%; border-radius: 3px;
-      transition: width .8s cubic-bezier(.4,0,.2,1);
-    }
-    .verdict-ai .confidence-bar-fill { background: linear-gradient(90deg, var(--red), #ef4444); }
-    .verdict-real .confidence-bar-fill { background: linear-gradient(90deg, var(--green), #10b981); }
-    .verdict-inconclusive .confidence-bar-fill { background: linear-gradient(90deg, var(--amber), #f59e0b); }
+    footer { text-align: center; margin-top: 1.5rem; font-size: 0.74rem; color: var(--ink-soft); }
 
-    /* ── Score Breakdown ── */
-    .score-breakdown {
-      padding: 0 1.25rem 1.25rem;
-      display: flex; gap: .5rem;
-    }
-    .score-pill {
-      flex: 1; padding: .7rem;
-      border-radius: var(--radius-sm);
-      text-align: center;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-    }
-    .score-pill-label {
-      font-size: .65rem; font-weight: 600;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--text-muted); margin-bottom: .2rem;
-    }
-    .score-pill-value { font-size: 1.1rem; font-weight: 800; }
-    .score-pill.ai-pill .score-pill-value { color: var(--red); }
-    .score-pill.real-pill .score-pill-value { color: var(--green); }
-
-    /* ───── Error toast ───── */
-    .error-toast {
-      display: none; margin-top: 1.25rem;
-      padding: 1rem 1.25rem;
-      border-radius: var(--radius-sm);
-      background: var(--red-bg);
-      border: 1px solid rgba(248,113,113,.25);
-      color: var(--red);
-      font-size: .85rem; line-height: 1.5;
-      animation: fadeUp .3s ease;
-    }
-    .error-toast.visible { display: block; }
-
-    /* ───── Footer ───── */
-    footer {
-      margin-top: 3rem; text-align: center;
-      font-size: .72rem; color: var(--text-muted);
-      line-height: 1.6;
-    }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-
-    /* ───── Animations ───── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ───── Responsive ───── */
     @media (max-width: 480px) {
-      .container { padding: 1.25rem 1rem 3rem; }
-      .dropzone { padding: 2rem 1rem; }
-      .result-confidence { font-size: 1.6rem; }
-      .score-breakdown { flex-direction: column; }
+      body { padding: 1.5rem 0.75rem 3rem; }
+      .masthead, .body-pad { padding-left: 1.25rem; padding-right: 1.25rem; }
+      .scan-frame { padding: 2.1rem 1rem; }
+      .stamp-row { flex-direction: column; }
+      .conf-figure, .conf-caption { text-align: left; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header>
-      <div class="logo">
-        <div class="logo-icon">&#x1F6E1;</div>
-        AI Content Detector
-      </div>
-      <p>Analyze images, audio, and video for signs of AI generation using state-of-the-art deep learning models — completely free.</p>
-    </header>
 
-    <!-- Tabs -->
-    <div class="tabs" id="tabs" role="tablist">
-      <button class="tab active" data-mode="image" role="tab" id="tab-image" aria-selected="true">
-        <span class="tab-icon">&#x1F5BC;</span> Image
-      </button>
-      <button class="tab" data-mode="audio" role="tab" id="tab-audio" aria-selected="false">
-        <span class="tab-icon">&#x1F3B5;</span> Audio
-      </button>
-      <button class="tab" data-mode="video" role="tab" id="tab-video" aria-selected="false">
-        <span class="tab-icon">&#x1F3AC;</span> Video
-      </button>
+  <main class="sheet">
+    <div class="masthead">
+      <div class="wordmark">CheckMe</div>
+      <h1>Verify what's real.</h1>
+      <p>Independent authenticity checks for images, audio, and video — run in your browser, nothing is stored.</p>
     </div>
 
-    <!-- Dropzone -->
-    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Upload file">
-      <span class="drop-icon" id="dropIcon">&#x1F5BC;</span>
-      <div class="drop-label" id="dropLabel">Drop an image here</div>
-      <div class="drop-hint" id="dropHint">or <span>click to browse</span> &middot; JPG, PNG, WebP</div>
-      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" />
+    <div class="channels" role="tablist">
+      <button class="channel active" data-mode="image" role="tab" aria-selected="true">Image</button>
+      <button class="channel" data-mode="audio" role="tab" aria-selected="false">Audio</button>
+      <button class="channel" data-mode="video" role="tab" aria-selected="false">Video</button>
     </div>
 
-    <!-- Preview -->
-    <div class="preview-area" id="previewArea">
-      <img id="previewImage" alt="Preview" style="display:none" />
-      <audio id="previewAudio" controls style="display:none"></audio>
-      <video id="previewVideo" controls style="display:none"></video>
-      <div class="preview-filename">
-        <span id="previewName">filename.jpg</span>
-        <button class="preview-remove" id="removeBtn">&#10005; Remove</button>
+    <div class="body-pad">
+      <div class="scan-frame" id="dropzone" tabindex="0" role="button" aria-label="Upload a file">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scan-label" id="dropLabel">Drop an image</div>
+        <div class="scan-hint" id="dropHint">or <span class="link">choose a file</span> — jpg, png, webp</div>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" />
       </div>
-    </div>
 
-    <!-- Analyze -->
-    <button class="analyze-btn" id="analyzeBtn" disabled>Analyze Content</button>
-
-    <!-- Status -->
-    <div class="status-bar" id="statusBar">
-      <div class="spinner"></div>
-      <div class="status-text" id="statusText">Preparing analysis...</div>
-    </div>
-
-    <!-- Error -->
-    <div class="error-toast" id="errorToast"></div>
-
-    <!-- Result Card -->
-    <div class="result-card" id="resultCard">
-      <div class="result-header">
-        <span class="result-verdict-icon" id="resultIcon"></span>
-        <div class="result-verdict-label" id="resultLabel"></div>
-        <div class="result-confidence" id="resultConfidence"></div>
-        <div class="result-confidence-label">Confidence</div>
-      </div>
-      <div class="confidence-bar-track">
-        <div class="confidence-bar-fill" id="confBar" style="width: 0%"></div>
-      </div>
-      <div class="score-breakdown">
-        <div class="score-pill ai-pill">
-          <div class="score-pill-label">AI / Fake</div>
-          <div class="score-pill-value" id="scoreFake">&mdash;</div>
+      <div class="sample" id="previewArea">
+        <div class="sample-media">
+          <img id="previewImage" alt="Selected preview" style="display:none" />
+          <audio id="previewAudio" controls style="display:none"></audio>
+          <video id="previewVideo" controls style="display:none"></video>
         </div>
-        <div class="score-pill real-pill">
-          <div class="score-pill-label">Real / Authentic</div>
-          <div class="score-pill-value" id="scoreReal">&mdash;</div>
+        <div class="sample-strip">
+          <span id="previewName">filename.ext</span>
+          <button class="text-btn" id="removeBtn">clear</button>
         </div>
       </div>
-      <div class="result-meta" id="resultMeta"></div>
+
+      <button class="run-btn" id="analyzeBtn" disabled>Run analysis</button>
+
+      <div class="ticker" id="statusBar">
+        <span class="cursor"></span>
+        <span id="statusText">Working…</span>
+      </div>
+
+      <div class="alert" id="errorToast"></div>
+
+      <section class="verdict" id="resultCard">
+        <div class="stamp-row">
+          <div class="stamp"><span class="stamp-text" id="resultLabel">Result</span></div>
+          <div>
+            <div class="conf-figure" id="resultConfidence">–%</div>
+            <div class="conf-caption">confidence</div>
+          </div>
+        </div>
+
+        <div class="split-bar">
+          <div class="split-fake" id="splitFake" style="width:50%"></div>
+          <div class="split-real" id="splitReal" style="width:50%"></div>
+        </div>
+        <div class="split-labels">
+          <span class="fake-label" id="scoreFake">synthetic –%</span>
+          <span class="real-label" id="scoreReal">authentic –%</span>
+        </div>
+
+        <div class="meta" id="resultMeta"></div>
+      </section>
+
+      <footer>Files are analyzed in memory and discarded after scoring.</footer>
     </div>
+  </main>
 
-    <!-- Footer -->
-    <footer>
-      Powered by <a href="https://huggingface.co" target="_blank" rel="noopener">Hugging Face</a> Serverless Inference<br>
-      Models: ViT Image Classifier &middot; Wav2Vec2 Audio Classifier
-    </footer>
-  </div>
-
-  <!-- EXIF reader (client-side only) -->
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
 
   <script>
-    // ─────────────────────────────────────────────────────────
-    //  State
-    // ─────────────────────────────────────────────────────────
     let currentMode = 'image';
     let selectedFile = null;
 
-    // DOM refs
     const $ = (s) => document.querySelector(s);
-    const tabs        = document.querySelectorAll('.tab');
+    const tabs        = document.querySelectorAll('.channel');
     const dropzone    = $('#dropzone');
     const fileInput   = $('#fileInput');
-    const dropIcon    = $('#dropIcon');
     const dropLabel   = $('#dropLabel');
     const dropHint    = $('#dropHint');
     const previewArea = $('#previewArea');
@@ -477,27 +349,23 @@
     const statusText  = $('#statusText');
     const errorToast  = $('#errorToast');
     const resultCard  = $('#resultCard');
-    const resultIcon  = $('#resultIcon');
     const resultLabel = $('#resultLabel');
     const resultConf  = $('#resultConfidence');
-    const confBar     = $('#confBar');
+    const splitFake   = $('#splitFake');
+    const splitReal   = $('#splitReal');
     const scoreFake   = $('#scoreFake');
     const scoreReal   = $('#scoreReal');
     const resultMeta  = $('#resultMeta');
 
-    // ─────────────────────────────────────────────────────────
-    //  Tab Switching
-    // ─────────────────────────────────────────────────────────
     const modeConfig = {
-      image: { icon: '\u{1F5BC}', label: 'Drop an image here', hint: 'or <span>click to browse</span> \u00b7 JPG, PNG, WebP', accept: 'image/jpeg,image/png,image/webp,.jpg,.png,.webp' },
-      audio: { icon: '\u{1F3B5}', label: 'Drop an audio file here', hint: 'or <span>click to browse</span> \u00b7 MP3, WAV, M4A, FLAC', accept: 'audio/mpeg,audio/wav,audio/x-m4a,audio/flac,.mp3,.wav,.m4a,.flac' },
-      video: { icon: '\u{1F3AC}', label: 'Drop a video here', hint: 'or <span>click to browse</span> \u00b7 MP4, WebM', accept: 'video/mp4,video/webm,.mp4,.webm' },
+      image: { label: 'Drop an image', hint: 'or <span class="link">choose a file</span> — jpg, png, webp', accept: 'image/jpeg,image/png,image/webp,.jpg,.png,.webp' },
+      audio: { label: 'Drop an audio clip', hint: 'or <span class="link">choose a file</span> — mp3, wav, m4a, flac', accept: 'audio/mpeg,audio/wav,audio/x-m4a,audio/flac,.mp3,.wav,.m4a,.flac' },
+      video: { label: 'Drop a video', hint: 'or <span class="link">choose a file</span> — mp4, webm', accept: 'video/mp4,video/webm,.mp4,.webm' },
     };
 
     function switchMode(mode) {
       currentMode = mode;
       const cfg = modeConfig[mode];
-      dropIcon.textContent = cfg.icon;
       dropLabel.textContent = cfg.label;
       dropHint.innerHTML = cfg.hint;
       fileInput.setAttribute('accept', cfg.accept);
@@ -511,9 +379,6 @@
 
     tabs.forEach(t => t.addEventListener('click', () => switchMode(t.dataset.mode)));
 
-    // ─────────────────────────────────────────────────────────
-    //  File Selection (click + drag-and-drop)
-    // ─────────────────────────────────────────────────────────
     dropzone.addEventListener('click', () => fileInput.click());
     dropzone.addEventListener('keydown', e => { if (e.key === 'Enter') fileInput.click(); });
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
@@ -533,13 +398,10 @@
       previewVid.style.display = 'none';
 
       const url = URL.createObjectURL(file);
-      if (currentMode === 'image') {
-        previewImg.src = url; previewImg.style.display = 'block';
-      } else if (currentMode === 'audio') {
-        previewAud.src = url; previewAud.style.display = 'block';
-      } else {
-        previewVid.src = url; previewVid.style.display = 'block';
-      }
+      if (currentMode === 'image') { previewImg.src = url; previewImg.style.display = 'block'; }
+      else if (currentMode === 'audio') { previewAud.src = url; previewAud.style.display = 'block'; }
+      else { previewVid.src = url; previewVid.style.display = 'block'; }
+
       previewName.textContent = file.name;
       previewArea.classList.add('visible');
       analyzeBtn.classList.add('visible');
@@ -556,18 +418,12 @@
       hideStatus(); hideResult(); hideError();
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  UI helpers
-    // ─────────────────────────────────────────────────────────
     function showStatus(html) { statusText.innerHTML = html; statusBar.classList.add('visible'); }
     function hideStatus() { statusBar.classList.remove('visible'); }
     function showError(msg) { errorToast.textContent = msg; errorToast.classList.add('visible'); }
     function hideError() { errorToast.classList.remove('visible'); }
-    function hideResult() { resultCard.classList.remove('visible', 'verdict-ai', 'verdict-real', 'verdict-inconclusive'); }
+    function hideResult() { resultCard.classList.remove('visible', 'ai', 'real', 'inconclusive'); }
 
-    // ─────────────────────────────────────────────────────────
-    //  EXIF / Metadata Pre-Check (Layer 1 for images)
-    // ─────────────────────────────────────────────────────────
     const AI_SIGNATURES = ['midjourney', 'stable diffusion', 'dall-e', 'dall\u00b7e', 'comfyui',
       'parameters', 'invokeai', 'automatic1111', 'novelai', 'nai diffusion',
       'dreamstudio', 'leonardo.ai', 'adobe firefly', 'copilot designer'];
@@ -579,240 +435,154 @@
         if (!meta) return null;
         const blob = JSON.stringify(meta).toLowerCase();
         for (const sig of AI_SIGNATURES) {
-          if (blob.includes(sig)) {
-            return { match: sig, meta: meta };
-          }
+          if (blob.includes(sig)) return { match: sig };
         }
         return null;
       } catch (e) { return null; }
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  Video Frame Extraction (client-side canvas)
-    // ─────────────────────────────────────────────────────────
     function extractFrames(file, timestamps) {
       timestamps = timestamps || [0.25, 0.5, 0.75];
-      return new Promise(function(resolve, reject) {
-        var video = document.createElement('video');
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
         video.preload = 'auto';
         video.muted = true;
         video.playsInline = true;
-        var url = URL.createObjectURL(file);
+        const url = URL.createObjectURL(file);
         video.src = url;
+        const frames = [];
+        let idx = 0;
 
-        var frames = [];
-        var idx = 0;
-
-        video.addEventListener('loadedmetadata', function() {
-          var seekTimes = timestamps.map(function(t) { return video.duration * t; });
-
+        video.addEventListener('loadedmetadata', () => {
+          const seekTimes = timestamps.map(t => video.duration * t);
           function seekNext() {
-            if (idx >= seekTimes.length) {
-              URL.revokeObjectURL(url);
-              return resolve(frames);
-            }
+            if (idx >= seekTimes.length) { URL.revokeObjectURL(url); return resolve(frames); }
             video.currentTime = seekTimes[idx];
           }
-
           video.addEventListener('seeked', function onSeeked() {
-            var canvas = document.createElement('canvas');
+            const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            canvas.toBlob(function(blobData) {
-              frames.push(blobData);
-              idx++;
-              seekNext();
-            }, 'image/jpeg', 0.92);
+            canvas.toBlob(blobData => { frames.push(blobData); idx++; seekNext(); }, 'image/jpeg', 0.92);
           });
-
           seekNext();
         });
 
-        video.addEventListener('error', function() {
-          URL.revokeObjectURL(url);
-          reject(new Error('Could not load video file'));
-        });
+        video.addEventListener('error', () => { URL.revokeObjectURL(url); reject(new Error('Could not load video file')); });
       });
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  Auto-retry helper for HF cold-start 503s
-    //  Shows a live countdown in the status bar, retries up to
-    //  MAX_RETRIES times before giving up.
-    // ─────────────────────────────────────────────────────────
-    var MAX_RETRIES = 3;
+    const MAX_RETRIES = 3;
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+    async function fetchWithRetry(url, opts, label) {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const res = await fetch(url, opts);
+        if (res.status !== 503) return res;
 
-    async function fetchWithRetry(url, opts, statusLabel) {
-      for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        var res = await fetch(url, opts);
-        if (res.status !== 503) return res;           // not a cold-start, proceed normally
-
-        // Parse the wait hint from server
-        var body = await res.json().catch(function() { return {}; });
-        var waitSec = 15;                             // sensible default
-        var errMsg = body.error || '';
-        var match = errMsg.match(/~(\d+)s/);
+        const body = await res.json().catch(() => ({}));
+        let waitSec = 15;
+        const match = (body.error || '').match(/~(\d+)s/);
         if (match) waitSec = parseInt(match[1], 10);
-        if (waitSec < 5) waitSec = 5;
-        if (waitSec > 60) waitSec = 60;
+        waitSec = Math.min(60, Math.max(5, waitSec));
 
-        // Show countdown
-        for (var s = waitSec; s > 0; s--) {
-          showStatus(
-            '<strong>' + statusLabel + '</strong> \u2014 Model warming up, retrying in ' + s + 's\u2026' +
-            ' <span style="opacity:.5">(attempt ' + attempt + '/' + MAX_RETRIES + ')</span>'
-          );
+        for (let s = waitSec; s > 0; s--) {
+          showStatus(`${label} — model warming up, retrying in ${s}s (${attempt}/${MAX_RETRIES})`);
           await sleep(1000);
         }
-        showStatus('<strong>' + statusLabel + '</strong> \u2014 Retrying\u2026');
       }
-      // Exhausted retries — make one last call and return whatever we get
       return await fetch(url, opts);
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  Analysis Dispatch
-    // ─────────────────────────────────────────────────────────
     analyzeBtn.addEventListener('click', runAnalysis);
 
     async function runAnalysis() {
       if (!selectedFile) return;
       analyzeBtn.disabled = true;
       hideResult(); hideError();
-
       try {
         if (currentMode === 'image') await analyzeImage();
         else if (currentMode === 'audio') await analyzeAudio();
         else await analyzeVideo();
       } catch (err) {
         hideStatus();
-        showError(err.message || 'An unexpected error occurred.');
+        showError(err.message || 'Something went wrong while analyzing this file.');
       } finally {
         analyzeBtn.disabled = false;
       }
     }
 
-    // ── Image ────────────────────────────────────────────────
     async function analyzeImage() {
-      // Layer 1: EXIF pre-check
-      showStatus('<strong>Scanning metadata</strong> for AI tool signatures\u2026');
-      var exifHit = await checkExif(selectedFile);
+      showStatus('Scanning embedded metadata…');
+      const exifHit = await checkExif(selectedFile);
       if (exifHit) {
         hideStatus();
-        displayResult({
-          verdict: 'ai',
-          confidence: 0.99,
-          fakeScore: 0.99,
-          realScore: 0.01,
-          modality: 'image',
-          analysisSource: 'Metadata signature: "' + exifHit.match + '"',
-        });
+        displayResult({ verdict: 'ai', confidence: 0.99, fakeScore: 0.99, realScore: 0.01, modality: 'image', analysisSource: `Signature: ${exifHit.match}` });
         return;
       }
-
-      // Layer 2: ViT model
-      showStatus('<strong>Running 3-model ensemble</strong> — analyzing pixel artifacts\u2026');
-      var form = new FormData();
+      showStatus('Scoring pixel-level artifacts…');
+      const form = new FormData();
       form.append('file', selectedFile);
-      var res = await fetchWithRetry('/api/detect/image', { method: 'POST', body: form }, 'Ensemble analysis');
-      var data = await res.json();
+      const res = await fetchWithRetry('/api/detect/image', { method: 'POST', body: form }, 'Image');
+      const data = await res.json();
       hideStatus();
       if (!res.ok) throw new Error(data.error || 'Image analysis failed.');
       displayResult(data);
     }
 
-    // ── Audio ────────────────────────────────────────────────
     async function analyzeAudio() {
-      showStatus('<strong>Running acoustic analysis</strong> via Wav2Vec2 model\u2026');
-      var form = new FormData();
+      showStatus('Scoring waveform artifacts…');
+      const form = new FormData();
       form.append('file', selectedFile);
-      var res = await fetchWithRetry('/api/detect/audio', { method: 'POST', body: form }, 'Audio analysis');
-      var data = await res.json();
+      const res = await fetchWithRetry('/api/detect/audio', { method: 'POST', body: form }, 'Audio');
+      const data = await res.json();
       hideStatus();
       if (!res.ok) throw new Error(data.error || 'Audio analysis failed.');
       displayResult(data);
     }
 
-    // ── Video ────────────────────────────────────────────────
     async function analyzeVideo() {
-      showStatus('<strong>Extracting video keyframes</strong> at 25%, 50%, 75%\u2026');
-      var frames;
-      try {
-        frames = await extractFrames(selectedFile);
-      } catch (e) {
-        throw new Error('Could not extract frames from this video. Try a different file.');
-      }
+      showStatus('Extracting keyframes…');
+      let frames;
+      try { frames = await extractFrames(selectedFile); }
+      catch { throw new Error('Could not extract frames from this video.'); }
       if (!frames.length) throw new Error('No frames could be extracted.');
 
-      showStatus('<strong>Analyzing ' + frames.length + ' keyframes</strong> via 3-model ensemble\u2026');
-      var form = new FormData();
-      frames.forEach(function(blob, i) { form.append('frames', blob, 'frame_' + i + '.jpg'); });
-      var res = await fetchWithRetry('/api/detect/video-frames', { method: 'POST', body: form }, 'Video analysis');
-      var data = await res.json();
+      showStatus(`Scoring ${frames.length} keyframes…`);
+      const form = new FormData();
+      frames.forEach((blob, i) => form.append('frames', blob, `frame_${i}.jpg`));
+      const res = await fetchWithRetry('/api/detect/video-frames', { method: 'POST', body: form }, 'Video');
+      const data = await res.json();
       hideStatus();
       if (!res.ok) throw new Error(data.error || 'Video analysis failed.');
       displayResult(data);
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  Render Result Card
-    // ─────────────────────────────────────────────────────────
+    const LABELS = {
+      ai:    { image: 'AI-Generated', audio: 'Synthetic Voice', video: 'Synthetic Video' },
+      real:  { image: 'Authentic', audio: 'Authentic Voice', video: 'Authentic Video' },
+    };
+
     function displayResult(data) {
-      var verdict = data.verdict;
-      var confidence = data.confidence;
-      var fakeScore = data.fakeScore;
-      var realScore = data.realScore;
-      var modality = data.modality;
-      var analysisSource = data.analysisSource;
+      const { verdict, confidence, fakeScore, realScore, modality, analysisSource } = data;
 
-      // Verdict visuals
-      resultCard.className = 'result-card visible';
-      if (verdict === 'ai') {
-        resultCard.classList.add('verdict-ai');
-        resultIcon.textContent = '\u26A0\uFE0F';
-        if (modality === 'audio') resultLabel.textContent = 'Deepfake / Synthetic Audio';
-        else if (modality === 'video') resultLabel.textContent = 'AI-Generated Video';
-        else resultLabel.textContent = 'AI-Generated Image';
-      } else if (verdict === 'real') {
-        resultCard.classList.add('verdict-real');
-        resultIcon.textContent = '\u2705';
-        if (modality === 'audio') resultLabel.textContent = 'Authentic / Human Voice';
-        else if (modality === 'video') resultLabel.textContent = 'Authentic / Human-Recorded Video';
-        else resultLabel.textContent = 'Authentic / Real Image';
-      } else {
-        resultCard.classList.add('verdict-inconclusive');
-        resultIcon.textContent = '\u{1F536}';
-        resultLabel.textContent = 'Inconclusive / Mixed Signals';
-      }
+      resultCard.className = 'verdict visible ' + verdict;
+      resultLabel.textContent = LABELS[verdict] ? LABELS[verdict][modality] : 'Inconclusive';
 
-      var pct = (confidence * 100).toFixed(1);
-      resultConf.textContent = pct + '%';
-      confBar.style.width = pct + '%';
-      scoreFake.textContent = (fakeScore * 100).toFixed(1) + '%';
-      scoreReal.textContent = (realScore * 100).toFixed(1) + '%';
+      const pct = (v) => (v * (v <= 1 ? 100 : 1)).toFixed(1);
+      resultConf.textContent = pct(confidence) + '%';
+      splitFake.style.width = pct(fakeScore) + '%';
+      splitReal.style.width = pct(realScore) + '%';
+      scoreFake.textContent = 'synthetic ' + pct(fakeScore) + '%';
+      scoreReal.textContent = 'authentic ' + pct(realScore) + '%';
 
-      // Meta tags
       resultMeta.innerHTML = '';
-      var tags = [
-        modality.charAt(0).toUpperCase() + modality.slice(1) + ' Analysis',
-        analysisSource || 'Unknown source',
-      ];
-      if (data.framesAnalyzed) tags.push(data.framesAnalyzed + ' frames analyzed');
-      if (data.fakeVotes !== undefined && data.totalVotes) {
-        tags.push(data.fakeVotes + '/' + data.totalVotes + ' models voted AI');
-      }
-      if (data.modelsUsed) tags.push(data.modelsUsed + ' models used');
-      tags.forEach(function(t) {
-        var el = document.createElement('span');
-        el.className = 'result-tag';
-        el.innerHTML = '<span class="tag-dot"></span>' + t;
-        resultMeta.appendChild(el);
-      });
+      const tags = [modality.charAt(0).toUpperCase() + modality.slice(1), analysisSource || 'ensemble'];
+      if (data.framesAnalyzed) tags.push(data.framesAnalyzed + ' frames sampled');
+      if (data.fakeVotes !== undefined && data.totalVotes) tags.push(`${data.fakeVotes}/${data.totalVotes} models flagged`);
+      tags.forEach(t => { const el = document.createElement('span'); el.textContent = t; resultMeta.appendChild(el); });
 
-      // Scroll into view
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   </script>
