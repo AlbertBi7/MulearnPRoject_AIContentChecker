@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Content Detector — Image · Audio · Video</title>
+  <meta name="description" content="Detect AI-generated images, deepfake audio, and synthetic video using free, multimodal machine-learning analysis." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ───── Design Tokens ───── */
+    :root {
+      --bg-primary: #0b0d11;
+      --bg-secondary: #12151c;
+      --bg-card: #181c27;
+      --bg-card-hover: #1e2333;
+      --bg-drop: #141824;
+      --border: #252a3a;
+      --border-active: #4f6ef7;
+      --text-primary: #e8ecf4;
+      --text-secondary: #8892a8;
+      --text-muted: #5c6478;
+      --accent: #4f6ef7;
+      --accent-glow: rgba(79, 110, 247, .25);
+      --green: #34d399;
+      --green-bg: rgba(52, 211, 153, .12);
+      --red: #f87171;
+      --red-bg: rgba(248, 113, 113, .12);
+      --amber: #fbbf24;
+      --amber-bg: rgba(251, 191, 36, .12);
+      --radius: 14px;
+      --radius-sm: 8px;
+      --transition: .25s cubic-bezier(.4,0,.2,1);
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ───── Reset & Base ───── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ───── Animated Background ───── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(79,110,247,.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 90%, rgba(168,85,247,.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ───── Layout ───── */
+    .container {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 680px;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    /* ───── Header ───── */
+    header { text-align: center; margin-bottom: 2.5rem; }
+    .logo {
+      display: inline-flex; align-items: center; gap: .6rem;
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em;
+      color: var(--text-primary); margin-bottom: .75rem;
+    }
+    .logo-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, #4f6ef7, #a855f7);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.15rem; color: #fff;
+      box-shadow: 0 0 24px rgba(79,110,247,.35);
+    }
+    header p {
+      color: var(--text-secondary); font-size: .92rem;
+      line-height: 1.55; max-width: 440px; margin: 0 auto;
+    }
+
+    /* ───── Tabs ───── */
+    .tabs {
+      display: flex; gap: 4px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 4px;
+      margin-bottom: 1.5rem;
+    }
+    .tab {
+      flex: 1; padding: .65rem .5rem;
+      text-align: center; cursor: pointer;
+      border-radius: 9px; border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font); font-size: .84rem; font-weight: 600;
+      transition: var(--transition);
+      display: flex; align-items: center; justify-content: center; gap: .4rem;
+    }
+    .tab:hover { color: var(--text-primary); background: var(--bg-card); }
+    .tab.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+    .tab-icon { font-size: 1rem; }
+
+    /* ───── Dropzone ───── */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-drop);
+      padding: 2.8rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+    .dropzone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at center, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0; transition: opacity .3s;
+    }
+    .dropzone.drag-over { border-color: var(--accent); }
+    .dropzone.drag-over::before { opacity: 1; }
+    .dropzone:hover { border-color: var(--border-active); background: var(--bg-card); }
+    .drop-icon { font-size: 2.4rem; margin-bottom: .75rem; display: block; opacity: .7; }
+    .drop-label { font-size: .95rem; font-weight: 600; color: var(--text-primary); margin-bottom: .35rem; }
+    .drop-hint { font-size: .78rem; color: var(--text-muted); }
+    .drop-hint span { color: var(--accent); font-weight: 600; }
+    #fileInput { display: none; }
+
+    /* ───── Preview ───── */
+    .preview-area {
+      margin-top: 1.25rem;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      display: none;
+      position: relative;
+    }
+    .preview-area.visible { display: block; animation: fadeUp .35s ease; }
+    .preview-area img,
+    .preview-area video {
+      width: 100%; display: block;
+      max-height: 340px; object-fit: contain;
+      background: #000;
+    }
+    .preview-area audio {
+      width: 100%; display: block; padding: 1.5rem;
+      background: var(--bg-card);
+    }
+    .preview-filename {
+      padding: .6rem 1rem;
+      font-size: .75rem; color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .preview-remove {
+      background: none; border: none; cursor: pointer;
+      color: var(--red); font-size: .8rem; font-weight: 600;
+      font-family: var(--font);
+    }
+    .preview-remove:hover { text-decoration: underline; }
+
+    /* ───── Analyze Button ───── */
+    .analyze-btn {
+      width: 100%; margin-top: 1.25rem;
+      padding: .85rem; border: none; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #4f6ef7, #7c5cf7);
+      color: #fff; font-family: var(--font);
+      font-size: .95rem; font-weight: 700;
+      cursor: pointer; transition: var(--transition);
+      box-shadow: 0 4px 20px var(--accent-glow);
+      display: none;
+    }
+    .analyze-btn.visible { display: block; animation: fadeUp .3s ease; }
+    .analyze-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px var(--accent-glow); }
+    .analyze-btn:active { transform: translateY(0); }
+    .analyze-btn:disabled {
+      opacity: .55; cursor: not-allowed;
+      transform: none !important; box-shadow: none !important;
+    }
+
+    /* ───── Status Bar ───── */
+    .status-bar {
+      display: none;
+      margin-top: 1.25rem;
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      animation: fadeUp .3s ease;
+    }
+    .status-bar.visible { display: flex; align-items: center; gap: .85rem; }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    .status-text { font-size: .85rem; color: var(--text-secondary); line-height: 1.4; }
+    .status-text strong { color: var(--text-primary); }
+
+    /* ───── Result Card ───── */
+    .result-card {
+      display: none;
+      margin-top: 1.5rem;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      animation: fadeUp .4s ease;
+    }
+    .result-card.visible { display: block; }
+
+    .result-header {
+      padding: 1.5rem;
+      text-align: center;
+      position: relative;
+    }
+    .result-header::before {
+      content: '';
+      position: absolute; inset: 0;
+      opacity: .6;
+      z-index: 0;
+    }
+    .result-header > * { position: relative; z-index: 1; }
+    .result-verdict-icon { font-size: 2.2rem; margin-bottom: .5rem; display: block; }
+    .result-verdict-label {
+      font-size: 1.35rem; font-weight: 800;
+      letter-spacing: -.02em; margin-bottom: .15rem;
+    }
+    .result-confidence {
+      font-size: 2rem; font-weight: 800;
+      letter-spacing: -.03em;
+    }
+    .result-confidence-label {
+      font-size: .78rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .06em;
+      opacity: .7; margin-top: .1rem;
+    }
+
+    /* Verdict colors */
+    .result-card.verdict-ai .result-header { background: var(--red-bg); }
+    .result-card.verdict-ai .result-header::before { background: linear-gradient(135deg, rgba(248,113,113,.08), transparent); }
+    .result-card.verdict-ai .result-verdict-label,
+    .result-card.verdict-ai .result-confidence { color: var(--red); }
+
+    .result-card.verdict-real .result-header { background: var(--green-bg); }
+    .result-card.verdict-real .result-header::before { background: linear-gradient(135deg, rgba(52,211,153,.08), transparent); }
+    .result-card.verdict-real .result-verdict-label,
+    .result-card.verdict-real .result-confidence { color: var(--green); }
+
+    .result-card.verdict-inconclusive .result-header { background: var(--amber-bg); }
+    .result-card.verdict-inconclusive .result-header::before { background: linear-gradient(135deg, rgba(251,191,36,.08), transparent); }
+    .result-card.verdict-inconclusive .result-verdict-label,
+    .result-card.verdict-inconclusive .result-confidence { color: var(--amber); }
+
+    .result-meta {
+      background: var(--bg-card);
+      padding: 1rem 1.25rem;
+      display: flex; flex-wrap: wrap; gap: .5rem;
+    }
+    .result-tag {
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .35rem .7rem;
+      font-size: .72rem; font-weight: 600;
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .result-tag .tag-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* Confidence Bar */
+    .confidence-bar-track {
+      height: 6px; border-radius: 3px;
+      background: var(--bg-secondary);
+      margin: .75rem 1.25rem 1rem;
+      overflow: hidden;
+    }
+    .confidence-bar-fill {
+      height: 100%; border-radius: 3px;
+      transition: width .8s cubic-bezier(.4,0,.2,1);
+    }
+    .verdict-ai .confidence-bar-fill { background: linear-gradient(90deg, var(--red), #ef4444); }
+    .verdict-real .confidence-bar-fill { background: linear-gradient(90deg, var(--green), #10b981); }
+    .verdict-inconclusive .confidence-bar-fill { background: linear-gradient(90deg, var(--amber), #f59e0b); }
+
+    /* ── Score Breakdown ── */
+    .score-breakdown {
+      padding: 0 1.25rem 1.25rem;
+      display: flex; gap: .5rem;
+    }
+    .score-pill {
+      flex: 1; padding: .7rem;
+      border-radius: var(--radius-sm);
+      text-align: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+    }
+    .score-pill-label {
+      font-size: .65rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--text-muted); margin-bottom: .2rem;
+    }
+    .score-pill-value { font-size: 1.1rem; font-weight: 800; }
+    .score-pill.ai-pill .score-pill-value { color: var(--red); }
+    .score-pill.real-pill .score-pill-value { color: var(--green); }
+
+    /* ───── Error toast ───── */
+    .error-toast {
+      display: none; margin-top: 1.25rem;
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-sm);
+      background: var(--red-bg);
+      border: 1px solid rgba(248,113,113,.25);
+      color: var(--red);
+      font-size: .85rem; line-height: 1.5;
+      animation: fadeUp .3s ease;
+    }
+    .error-toast.visible { display: block; }
+
+    /* ───── Footer ───── */
+    footer {
+      margin-top: 3rem; text-align: center;
+      font-size: .72rem; color: var(--text-muted);
+      line-height: 1.6;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ───── Animations ───── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ───── Responsive ───── */
+    @media (max-width: 480px) {
+      .container { padding: 1.25rem 1rem 3rem; }
+      .dropzone { padding: 2rem 1rem; }
+      .result-confidence { font-size: 1.6rem; }
+      .score-breakdown { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">&#x1F6E1;</div>
+        AI Content Detector
+      </div>
+      <p>Analyze images, audio, and video for signs of AI generation using state-of-the-art deep learning models — completely free.</p>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabs" role="tablist">
+      <button class="tab active" data-mode="image" role="tab" id="tab-image" aria-selected="true">
+        <span class="tab-icon">&#x1F5BC;</span> Image
+      </button>
+      <button class="tab" data-mode="audio" role="tab" id="tab-audio" aria-selected="false">
+        <span class="tab-icon">&#x1F3B5;</span> Audio
+      </button>
+      <button class="tab" data-mode="video" role="tab" id="tab-video" aria-selected="false">
+        <span class="tab-icon">&#x1F3AC;</span> Video
+      </button>
+    </div>
+
+    <!-- Dropzone -->
+    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Upload file">
+      <span class="drop-icon" id="dropIcon">&#x1F5BC;</span>
+      <div class="drop-label" id="dropLabel">Drop an image here</div>
+      <div class="drop-hint" id="dropHint">or <span>click to browse</span> &middot; JPG, PNG, WebP</div>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" />
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area" id="previewArea">
+      <img id="previewImage" alt="Preview" style="display:none" />
+      <audio id="previewAudio" controls style="display:none"></audio>
+      <video id="previewVideo" controls style="display:none"></video>
+      <div class="preview-filename">
+        <span id="previewName">filename.jpg</span>
+        <button class="preview-remove" id="removeBtn">&#10005; Remove</button>
+      </div>
+    </div>
+
+    <!-- Analyze -->
+    <button class="analyze-btn" id="analyzeBtn" disabled>Analyze Content</button>
+
+    <!-- Status -->
+    <div class="status-bar" id="statusBar">
+      <div class="spinner"></div>
+      <div class="status-text" id="statusText">Preparing analysis...</div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-toast" id="errorToast"></div>
+
+    <!-- Result Card -->
+    <div class="result-card" id="resultCard">
+      <div class="result-header">
+        <span class="result-verdict-icon" id="resultIcon"></span>
+        <div class="result-verdict-label" id="resultLabel"></div>
+        <div class="result-confidence" id="resultConfidence"></div>
+        <div class="result-confidence-label">Confidence</div>
+      </div>
+      <div class="confidence-bar-track">
+        <div class="confidence-bar-fill" id="confBar" style="width: 0%"></div>
+      </div>
+      <div class="score-breakdown">
+        <div class="score-pill ai-pill">
+          <div class="score-pill-label">AI / Fake</div>
+          <div class="score-pill-value" id="scoreFake">&mdash;</div>
+        </div>
+        <div class="score-pill real-pill">
+          <div class="score-pill-label">Real / Authentic</div>
+          <div class="score-pill-value" id="scoreReal">&mdash;</div>
+        </div>
+      </div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      Powered by <a href="https://huggingface.co" target="_blank" rel="noopener">Hugging Face</a> Serverless Inference<br>
+      Models: ViT Image Classifier &middot; Wav2Vec2 Audio Classifier
+    </footer>
+  </div>
+
+  <!-- EXIF reader (client-side only) -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
+
+  <script>
+    // ─────────────────────────────────────────────────────────
+    //  State
+    // ─────────────────────────────────────────────────────────
+    let currentMode = 'image';
+    let selectedFile = null;
+
+    // DOM refs
+    const $ = (s) => document.querySelector(s);
+    const tabs        = document.querySelectorAll('.tab');
+    const dropzone    = $('#dropzone');
+    const fileInput   = $('#fileInput');
+    const dropIcon    = $('#dropIcon');
+    const dropLabel   = $('#dropLabel');
+    const dropHint    = $('#dropHint');
+    const previewArea = $('#previewArea');
+    const previewImg  = $('#previewImage');
+    const previewAud  = $('#previewAudio');
+    const previewVid  = $('#previewVideo');
+    const previewName = $('#previewName');
+    const removeBtn   = $('#removeBtn');
+    const analyzeBtn  = $('#analyzeBtn');
+    const statusBar   = $('#statusBar');
+    const statusText  = $('#statusText');
+    const errorToast  = $('#errorToast');
+    const resultCard  = $('#resultCard');
+    const resultIcon  = $('#resultIcon');
+    const resultLabel = $('#resultLabel');
+    const resultConf  = $('#resultConfidence');
+    const confBar     = $('#confBar');
+    const scoreFake   = $('#scoreFake');
+    const scoreReal   = $('#scoreReal');
+    const resultMeta  = $('#resultMeta');
+
+    // ─────────────────────────────────────────────────────────
+    //  Tab Switching
+    // ─────────────────────────────────────────────────────────
+    const modeConfig = {
+      image: { icon: '\u{1F5BC}', label: 'Drop an image here', hint: 'or <span>click to browse</span> \u00b7 JPG, PNG, WebP', accept: 'image/jpeg,image/png,image/webp,.jpg,.png,.webp' },
+      audio: { icon: '\u{1F3B5}', label: 'Drop an audio file here', hint: 'or <span>click to browse</span> \u00b7 MP3, WAV, M4A, FLAC', accept: 'audio/mpeg,audio/wav,audio/x-m4a,audio/flac,.mp3,.wav,.m4a,.flac' },
+      video: { icon: '\u{1F3AC}', label: 'Drop a video here', hint: 'or <span>click to browse</span> \u00b7 MP4, WebM', accept: 'video/mp4,video/webm,.mp4,.webm' },
+    };
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const cfg = modeConfig[mode];
+      dropIcon.textContent = cfg.icon;
+      dropLabel.textContent = cfg.label;
+      dropHint.innerHTML = cfg.hint;
+      fileInput.setAttribute('accept', cfg.accept);
+      tabs.forEach(t => {
+        const active = t.dataset.mode === mode;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active);
+      });
+      clearSelection();
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => switchMode(t.dataset.mode)));
+
+    // ─────────────────────────────────────────────────────────
+    //  File Selection (click + drag-and-drop)
+    // ─────────────────────────────────────────────────────────
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('keydown', e => { if (e.key === 'Enter') fileInput.click(); });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault(); dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      selectedFile = file;
+      hideResult(); hideError();
+      previewImg.style.display = 'none';
+      previewAud.style.display = 'none';
+      previewVid.style.display = 'none';
+
+      const url = URL.createObjectURL(file);
+      if (currentMode === 'image') {
+        previewImg.src = url; previewImg.style.display = 'block';
+      } else if (currentMode === 'audio') {
+        previewAud.src = url; previewAud.style.display = 'block';
+      } else {
+        previewVid.src = url; previewVid.style.display = 'block';
+      }
+      previewName.textContent = file.name;
+      previewArea.classList.add('visible');
+      analyzeBtn.classList.add('visible');
+      analyzeBtn.disabled = false;
+    }
+
+    removeBtn.addEventListener('click', clearSelection);
+    function clearSelection() {
+      selectedFile = null;
+      fileInput.value = '';
+      previewArea.classList.remove('visible');
+      analyzeBtn.classList.remove('visible');
+      analyzeBtn.disabled = true;
+      hideStatus(); hideResult(); hideError();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  UI helpers
+    // ─────────────────────────────────────────────────────────
+    function showStatus(html) { statusText.innerHTML = html; statusBar.classList.add('visible'); }
+    function hideStatus() { statusBar.classList.remove('visible'); }
+    function showError(msg) { errorToast.textContent = msg; errorToast.classList.add('visible'); }
+    function hideError() { errorToast.classList.remove('visible'); }
+    function hideResult() { resultCard.classList.remove('visible', 'verdict-ai', 'verdict-real', 'verdict-inconclusive'); }
+
+    // ─────────────────────────────────────────────────────────
+    //  EXIF / Metadata Pre-Check (Layer 1 for images)
+    // ─────────────────────────────────────────────────────────
+    const AI_SIGNATURES = ['midjourney', 'stable diffusion', 'dall-e', 'dall\u00b7e', 'comfyui',
+      'parameters', 'invokeai', 'automatic1111', 'novelai', 'nai diffusion',
+      'dreamstudio', 'leonardo.ai', 'adobe firefly', 'copilot designer'];
+
+    async function checkExif(file) {
+      try {
+        if (typeof exifr === 'undefined') return null;
+        const meta = await exifr.parse(file, { translateValues: false, mergeOutput: true });
+        if (!meta) return null;
+        const blob = JSON.stringify(meta).toLowerCase();
+        for (const sig of AI_SIGNATURES) {
+          if (blob.includes(sig)) {
+            return { match: sig, meta: meta };
+          }
+        }
+        return null;
+      } catch (e) { return null; }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  Video Frame Extraction (client-side canvas)
+    // ─────────────────────────────────────────────────────────
+    function extractFrames(file, timestamps) {
+      timestamps = timestamps || [0.25, 0.5, 0.75];
+      return new Promise(function(resolve, reject) {
+        var video = document.createElement('video');
+        video.preload = 'auto';
+        video.muted = true;
+        video.playsInline = true;
+        var url = URL.createObjectURL(file);
+        video.src = url;
+
+        var frames = [];
+        var idx = 0;
+
+        video.addEventListener('loadedmetadata', function() {
+          var seekTimes = timestamps.map(function(t) { return video.duration * t; });
+
+          function seekNext() {
+            if (idx >= seekTimes.length) {
+              URL.revokeObjectURL(url);
+              return resolve(frames);
+            }
+            video.currentTime = seekTimes[idx];
+          }
+
+          video.addEventListener('seeked', function onSeeked() {
+            var canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            canvas.toBlob(function(blobData) {
+              frames.push(blobData);
+              idx++;
+              seekNext();
+            }, 'image/jpeg', 0.92);
+          });
+
+          seekNext();
+        });
+
+        video.addEventListener('error', function() {
+          URL.revokeObjectURL(url);
+          reject(new Error('Could not load video file'));
+        });
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  Auto-retry helper for HF cold-start 503s
+    //  Shows a live countdown in the status bar, retries up to
+    //  MAX_RETRIES times before giving up.
+    // ─────────────────────────────────────────────────────────
+    var MAX_RETRIES = 3;
+
+    function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+    async function fetchWithRetry(url, opts, statusLabel) {
+      for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        var res = await fetch(url, opts);
+        if (res.status !== 503) return res;           // not a cold-start, proceed normally
+
+        // Parse the wait hint from server
+        var body = await res.json().catch(function() { return {}; });
+        var waitSec = 15;                             // sensible default
+        var errMsg = body.error || '';
+        var match = errMsg.match(/~(\d+)s/);
+        if (match) waitSec = parseInt(match[1], 10);
+        if (waitSec < 5) waitSec = 5;
+        if (waitSec > 60) waitSec = 60;
+
+        // Show countdown
+        for (var s = waitSec; s > 0; s--) {
+          showStatus(
+            '<strong>' + statusLabel + '</strong> \u2014 Model warming up, retrying in ' + s + 's\u2026' +
+            ' <span style="opacity:.5">(attempt ' + attempt + '/' + MAX_RETRIES + ')</span>'
+          );
+          await sleep(1000);
+        }
+        showStatus('<strong>' + statusLabel + '</strong> \u2014 Retrying\u2026');
+      }
+      // Exhausted retries — make one last call and return whatever we get
+      return await fetch(url, opts);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  Analysis Dispatch
+    // ─────────────────────────────────────────────────────────
+    analyzeBtn.addEventListener('click', runAnalysis);
+
+    async function runAnalysis() {
+      if (!selectedFile) return;
+      analyzeBtn.disabled = true;
+      hideResult(); hideError();
+
+      try {
+        if (currentMode === 'image') await analyzeImage();
+        else if (currentMode === 'audio') await analyzeAudio();
+        else await analyzeVideo();
+      } catch (err) {
+        hideStatus();
+        showError(err.message || 'An unexpected error occurred.');
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    // ── Image ────────────────────────────────────────────────
+    async function analyzeImage() {
+      // Layer 1: EXIF pre-check
+      showStatus('<strong>Scanning metadata</strong> for AI tool signatures\u2026');
+      var exifHit = await checkExif(selectedFile);
+      if (exifHit) {
+        hideStatus();
+        displayResult({
+          verdict: 'ai',
+          confidence: 0.99,
+          fakeScore: 0.99,
+          realScore: 0.01,
+          modality: 'image',
+          analysisSource: 'Metadata signature: "' + exifHit.match + '"',
+        });
+        return;
+      }
+
+      // Layer 2: ViT model
+      showStatus('<strong>Running 3-model ensemble</strong> — analyzing pixel artifacts\u2026');
+      var form = new FormData();
+      form.append('file', selectedFile);
+      var res = await fetchWithRetry('/api/detect/image', { method: 'POST', body: form }, 'Ensemble analysis');
+      var data = await res.json();
+      hideStatus();
+      if (!res.ok) throw new Error(data.error || 'Image analysis failed.');
+      displayResult(data);
+    }
+
+    // ── Audio ────────────────────────────────────────────────
+    async function analyzeAudio() {
+      showStatus('<strong>Running acoustic analysis</strong> via Wav2Vec2 model\u2026');
+      var form = new FormData();
+      form.append('file', selectedFile);
+      var res = await fetchWithRetry('/api/detect/audio', { method: 'POST', body: form }, 'Audio analysis');
+      var data = await res.json();
+      hideStatus();
+      if (!res.ok) throw new Error(data.error || 'Audio analysis failed.');
+      displayResult(data);
+    }
+
+    // ── Video ────────────────────────────────────────────────
+    async function analyzeVideo() {
+      showStatus('<strong>Extracting video keyframes</strong> at 25%, 50%, 75%\u2026');
+      var frames;
+      try {
+        frames = await extractFrames(selectedFile);
+      } catch (e) {
+        throw new Error('Could not extract frames from this video. Try a different file.');
+      }
+      if (!frames.length) throw new Error('No frames could be extracted.');
+
+      showStatus('<strong>Analyzing ' + frames.length + ' keyframes</strong> via 3-model ensemble\u2026');
+      var form = new FormData();
+      frames.forEach(function(blob, i) { form.append('frames', blob, 'frame_' + i + '.jpg'); });
+      var res = await fetchWithRetry('/api/detect/video-frames', { method: 'POST', body: form }, 'Video analysis');
+      var data = await res.json();
+      hideStatus();
+      if (!res.ok) throw new Error(data.error || 'Video analysis failed.');
+      displayResult(data);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  Render Result Card
+    // ─────────────────────────────────────────────────────────
+    function displayResult(data) {
+      var verdict = data.verdict;
+      var confidence = data.confidence;
+      var fakeScore = data.fakeScore;
+      var realScore = data.realScore;
+      var modality = data.modality;
+      var analysisSource = data.analysisSource;
+
+      // Verdict visuals
+      resultCard.className = 'result-card visible';
+      if (verdict === 'ai') {
+        resultCard.classList.add('verdict-ai');
+        resultIcon.textContent = '\u26A0\uFE0F';
+        if (modality === 'audio') resultLabel.textContent = 'Deepfake / Synthetic Audio';
+        else if (modality === 'video') resultLabel.textContent = 'AI-Generated Video';
+        else resultLabel.textContent = 'AI-Generated Image';
+      } else if (verdict === 'real') {
+        resultCard.classList.add('verdict-real');
+        resultIcon.textContent = '\u2705';
+        if (modality === 'audio') resultLabel.textContent = 'Authentic / Human Voice';
+        else if (modality === 'video') resultLabel.textContent = 'Authentic / Human-Recorded Video';
+        else resultLabel.textContent = 'Authentic / Real Image';
+      } else {
+        resultCard.classList.add('verdict-inconclusive');
+        resultIcon.textContent = '\u{1F536}';
+        resultLabel.textContent = 'Inconclusive / Mixed Signals';
+      }
+
+      var pct = (confidence * 100).toFixed(1);
+      resultConf.textContent = pct + '%';
+      confBar.style.width = pct + '%';
+      scoreFake.textContent = (fakeScore * 100).toFixed(1) + '%';
+      scoreReal.textContent = (realScore * 100).toFixed(1) + '%';
+
+      // Meta tags
+      resultMeta.innerHTML = '';
+      var tags = [
+        modality.charAt(0).toUpperCase() + modality.slice(1) + ' Analysis',
+        analysisSource || 'Unknown source',
+      ];
+      if (data.framesAnalyzed) tags.push(data.framesAnalyzed + ' frames analyzed');
+      if (data.fakeVotes !== undefined && data.totalVotes) {
+        tags.push(data.fakeVotes + '/' + data.totalVotes + ' models voted AI');
+      }
+      if (data.modelsUsed) tags.push(data.modelsUsed + ' models used');
+      tags.forEach(function(t) {
+        var el = document.createElement('span');
+        el.className = 'result-tag';
+        el.innerHTML = '<span class="tag-dot"></span>' + t;
+        resultMeta.appendChild(el);
+      });
+
+      // Scroll into view
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  </script>
+</body>
+</html>
